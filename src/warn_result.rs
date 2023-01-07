@@ -119,7 +119,7 @@ impl<T, E, W> Result<&T, E, W> {
     where
         T: Clone,
     {
-        self.map_val(|val| val.clone())
+        self.map_val(T::clone)
     }
 }
 
@@ -145,10 +145,9 @@ impl<T, E, W> Result<Option<T>, E, W> {
     pub fn transpose_lossy(self) -> Option<Result<T, E, W>> {
         match self {
             Ok(Some(val)) => Some(Ok(val)),
-            Ok(None) => None,
+            Ok(None) | Warn(None, _) => None,
 
             Warn(Some(val), warn) => Some(Warn(val, warn)),
-            Warn(None, _) => None,
 
             Err(err) => Some(Err(err)),
         }
@@ -160,14 +159,12 @@ impl<T, E, W> Result<Result<T, E, W>, E, W> {
     pub fn flatten_inner(self) -> Result<T, E, W> {
         match self {
             Ok(Ok(val)) => Ok(val),
-            Ok(Warn(val, warn)) => Warn(val, warn),
-            Ok(Err(err)) => Err(err),
 
-            Warn(Ok(val), warn) => Warn(val, warn),
-            Warn(Warn(val, warn), _) => Warn(val, warn),
-            Warn(Err(err), _) => Err(err),
+            Ok(Warn(val, warn))
+            | Warn(Warn(val, warn), _)
+            | Warn(Ok(val), warn)=> Warn(val, warn),
 
-            Err(err) => Err(err),
+            Ok(Err(err)) | Warn(Err(err), _) | Err(err) => Err(err),
         }
     }
 
@@ -175,14 +172,13 @@ impl<T, E, W> Result<Result<T, E, W>, E, W> {
     pub fn flatten_outer(self) -> Result<T, E, W> {
         match self {
             Ok(Ok(val)) => Ok(val),
-            Ok(Warn(val, warn)) => Warn(val, warn),
-            Ok(Err(err)) => Err(err),
 
-            Warn(Ok(val), warn) => Warn(val, warn),
-            Warn(Warn(val, _), warn) => Warn(val, warn),
-            Warn(Err(err), _) => Err(err),
+            Ok(Warn(val, warn))
+            | Warn(Ok(val) | Warn(val, _), warn) => Warn(val, warn),
 
-            Err(err) => Err(err),
+            Ok(Err(err))
+            | Warn(Err(err), _)
+            | Err(err) => Err(err),
         }
     }
 }
@@ -231,8 +227,7 @@ impl<T, E, W> FromResidual for Result<T, E, W> {
     fn from_residual(residual: <Self as Try>::Residual) -> Self {
         match residual {
             Err(err) => Err(err),
-            Ok(val) => match val {},
-            Warn(val, _) => match val {},
+            Ok(val) | Warn(val, _) => match val {},
         }
     }
 }
@@ -259,11 +254,11 @@ impl<T: Termination, E: Debug, W: Debug> Termination for Result<T, E, W> {
         match self {
             Ok(val) => val.report(),
             Warn(val, warn) => {
-                let _ = writeln!(io::stderr(), "Warning: {warn:?}");
+                drop(writeln!(io::stderr(), "Warning: {warn:?}"));
                 val.report()
             }
             Err(err) => {
-                let _ = writeln!(io::stderr(), "Error: {err:?}");
+                drop(writeln!(io::stderr(), "Error: {err:?}"));
                 ExitCode::FAILURE
             }
         }

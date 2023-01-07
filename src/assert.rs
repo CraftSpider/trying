@@ -1,9 +1,10 @@
+use alloc::borrow::Cow;
 use core::fmt::Debug;
 use core::ops::{ControlFlow, FromResidual, Try};
 use core::panic::Location;
-use std::borrow::Cow;
+use core::convert::Infallible;
+use core::fmt::Formatter;
 use std::error::Error;
-use std::fmt::Formatter;
 use std::process::{ExitCode, Termination};
 
 pub struct AssertResidual(&'static Location<'static>, Cow<'static, str>);
@@ -84,15 +85,17 @@ pub struct Assert(AssertInner);
 
 impl Assert {
     fn inner_defuse(mut self) -> AssertInner {
-        std::mem::replace(&mut self.0, AssertInner::Success)
+        core::mem::replace(&mut self.0, AssertInner::Success)
     }
 
     /// Create a successful assertion
-    pub fn success() -> Assert {
+    #[inline]
+    pub const fn success() -> Assert {
         Assert(AssertInner::Success)
     }
 
     /// Create a failed assertion
+    #[inline]
     #[track_caller]
     pub fn failure() -> Assert {
         Assert(AssertInner::Failure(
@@ -131,7 +134,7 @@ impl Assert {
         if a == b {
             Assert::success()
         } else {
-            Assert::failure().msg(format!("Expected `{:?}` to equal `{:?}`", a, b))
+            Assert::failure().msg(format!("Expected `{a:?}` to equal `{b:?}`"))
         }
     }
 
@@ -145,7 +148,7 @@ impl Assert {
         if a != b {
             Assert::success()
         } else {
-            Assert::failure().msg(format!("Expected `{:?}` to not equal `{:?}`", a, b))
+            Assert::failure().msg(format!("Expected `{a:?}` to not equal `{b:?}`"))
         }
     }
 
@@ -157,7 +160,7 @@ impl Assert {
     {
         Assert(match self.inner_defuse() {
             AssertInner::Failure(loc, _) => AssertInner::Failure(loc, msg.into()),
-            assert => assert,
+            AssertInner::Success => AssertInner::Success,
         })
     }
 
@@ -166,14 +169,14 @@ impl Assert {
     pub fn with_msg(self, f: impl FnOnce() -> String) -> Assert {
         Assert(match self.inner_defuse() {
             AssertInner::Failure(loc, _) => AssertInner::Failure(loc, Cow::from(f())),
-            assert => assert,
+            AssertInner::Success => AssertInner::Success,
         })
     }
 
     /// Convert this assertion to a panic if it failed, or do nothing on a success.
     pub fn to_panic(self) {
         if let AssertInner::Failure(loc, msg) = self.inner_defuse() {
-            panic!("{} at {}", msg, loc)
+            panic!("{msg} at {loc}")
         }
     }
 
@@ -184,12 +187,14 @@ impl Assert {
     }
 
     /// Check whether this assertion failed
-    pub fn is_failure(&self) -> bool {
+    #[must_use]
+    pub const fn is_failure(&self) -> bool {
         matches!(self.0, AssertInner::Failure(..))
     }
 
     /// Check whether this assertion succeeded
-    pub fn is_success(&self) -> bool {
+    #[must_use]
+    pub const fn is_success(&self) -> bool {
         matches!(self.0, AssertInner::Success)
     }
 }
@@ -197,16 +202,16 @@ impl Assert {
 impl Drop for Assert {
     fn drop(&mut self) {
         if let AssertInner::Failure(_, _) = self.0 {
-            panic!("Failed assertion dropped. (Did you forget a `?` or `to_panic`?)\n{:?}", self);
+            panic!("Failed assertion dropped. (Did you forget a `?` or `to_panic`?)\n{self:?}");
         }
     }
 }
 
 impl Debug for Assert {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match &self.0 {
             AssertInner::Failure(loc, msg) => {
-                write!(f, "Assertion Failed: {} at {}", msg, loc)
+                write!(f, "Assertion Failed: {msg} at {loc}")
             }
             AssertInner::Success => {
                 write!(f, "Assertion Successful")
@@ -237,26 +242,37 @@ impl FromResidual for Assert {
     }
 }
 
-impl<T> FromResidual<AssertResidual> for Result<T, Assert> {
-    fn from_residual(residual: AssertResidual) -> Self {
-        Err(Assert::from_residual(residual))
+impl<E> FromResidual<Result<Infallible, E>> for Assert
+where
+    E: Error,
+{
+    #[track_caller]
+    fn from_residual(residual: Result<Infallible, E>) -> Self {
+        match residual {
+            Ok(val) => match val {},
+            Err(err) => Assert::failure().msg(err.to_string())
+        }
+    }
+}
+
+impl FromResidual<Option<Infallible>> for Assert {
+    #[track_caller]
+    fn from_residual(residual: Option<Infallible>) -> Self {
+        match residual {
+            Some(val) => match val {},
+            None => Assert::failure(),
+        }
     }
 }
 
 impl Termination for Assert {
     fn report(self) -> ExitCode {
         if let AssertInner::Failure(_, _) = self.0 {
-            println!("{:?}", self);
+            println!("{self:?}");
             ExitCode::FAILURE
         } else {
             ExitCode::SUCCESS
         }
-    }
-}
-
-impl<T> From<Assert> for Result<T, Assert> {
-    fn from(a: Assert) -> Self {
-        Err(a)
     }
 }
 
@@ -266,6 +282,18 @@ where
 {
     fn from(err: E) -> Self {
         Assert::failure().msg(err.to_string())
+    }
+}
+
+impl<T> From<Assert> for Result<T, Assert> {
+    fn from(a: Assert) -> Self {
+        Err(a)
+    }
+}
+
+impl<T> FromResidual<AssertResidual> for Result<T, Assert> {
+    fn from_residual(residual: AssertResidual) -> Self {
+        Err(Assert::from_residual(residual))
     }
 }
 
@@ -281,7 +309,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_assert_true_failure() {
-        Assert::is_true(false).to_panic();
+        Assert::is_true(false).to_panic()
     }
 
     #[test]

@@ -1,4 +1,5 @@
-use std::ops::{Deref, DerefMut};
+use core::ops::{Deref, DerefMut};
+
 use MaybeWarn::*;
 
 pub enum MaybeWarn<T, W> {
@@ -8,18 +9,14 @@ pub enum MaybeWarn<T, W> {
 
 impl<T, W> MaybeWarn<T, W> {
     pub fn value(&self) -> &T {
-        match self {
-            Ok(val) => val,
-            Warn(val, _) => val,
-        }
+        let (Ok(val) | Warn(val, _)) = self;
+        val
     }
 
     pub fn value_mut(&mut self) -> &mut T {
-        match self {
-            Ok(val) => val,
-            Warn(val, _) => val,
-        }
-    }
+        let (Ok(val) | Warn(val, _)) = self;
+        val
+}
 
     pub fn as_ref(&self) -> MaybeWarn<&T, &W> {
         match self {
