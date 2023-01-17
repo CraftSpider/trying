@@ -131,7 +131,7 @@ impl Assert {
         if a == b {
             Assert::success()
         } else {
-            Assert::failure().msg(format!("Expected `{:?}` to equal `{:?}`", a, b))
+            Assert::failure().msg(format!("Expected `{a:?}` to equal `{b:?}`"))
         }
     }
 
@@ -145,7 +145,7 @@ impl Assert {
         if a != b {
             Assert::success()
         } else {
-            Assert::failure().msg(format!("Expected `{:?}` to not equal `{:?}`", a, b))
+            Assert::failure().msg(format!("Expected `{a:?}` to not equal `{b:?}`"))
         }
     }
 
@@ -173,7 +173,7 @@ impl Assert {
     /// Convert this assertion to a panic if it failed, or do nothing on a success.
     pub fn to_panic(self) {
         if let AssertInner::Failure(loc, msg) = self.inner_defuse() {
-            panic!("{} at {}", msg, loc)
+            panic!("{msg} at {loc}")
         }
     }
 
@@ -197,7 +197,7 @@ impl Assert {
 impl Drop for Assert {
     fn drop(&mut self) {
         if let AssertInner::Failure(_, _) = self.0 {
-            panic!("Failed assertion dropped. (Did you forget a `?` or `to_panic`?)\n{:?}", self);
+            panic!("Failed assertion dropped. (Did you forget a `?` or `to_panic`?)\n{self:?}");
         }
     }
 }
@@ -206,7 +206,7 @@ impl Debug for Assert {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             AssertInner::Failure(loc, msg) => {
-                write!(f, "Assertion Failed: {} at {}", msg, loc)
+                write!(f, "Assertion Failed: {msg} at {loc}")
             }
             AssertInner::Success => {
                 write!(f, "Assertion Successful")
@@ -246,7 +246,7 @@ impl<T> FromResidual<AssertResidual> for Result<T, Assert> {
 impl Termination for Assert {
     fn report(self) -> ExitCode {
         if let AssertInner::Failure(_, _) = self.0 {
-            println!("{:?}", self);
+            println!("{self:?}");
             ExitCode::FAILURE
         } else {
             ExitCode::SUCCESS

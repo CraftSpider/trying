@@ -5,14 +5,58 @@ use core::ops::{ControlFlow, FromResidual, Try};
 
 use Early::*;
 
-pub enum Early<T, U> {
-    Done(T),
-    Todo(U),
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Early<D, T> {
+    Done(D),
+    Todo(T),
 }
 
-impl<T, U> Try for Early<T, U> {
-    type Output = U;
-    type Residual = Early<T, Infallible>;
+impl<D, T> Early<D, T> {
+    pub fn unwrap(self) -> D {
+        if let Done(val) = self {
+            val
+        } else {
+            panic!("Called `unwrap` on Early::Todo")
+        }
+    }
+
+    pub fn unwrap_todo(self) -> T {
+        if let Todo(val) = self {
+            val
+        } else {
+            panic!("Called `unwrap` on Early::Done")
+        }
+    }
+
+    pub fn as_ref(&self) -> Early<&D, &T> {
+        match self {
+            Done(val) => Done(val),
+            Todo(val) => Todo(val),
+        }
+    }
+
+    pub fn as_mut(&mut self) -> Early<&mut D, &mut T> {
+        match self {
+            Done(val) => Done(val),
+            Todo(val) => Todo(val),
+        }
+    }
+
+    /// If `Done`, return `Early::Done(D)`. If `Todo`, return `f(T)`
+    pub fn and_then<U, F>(self, f: F) -> Early<D, U>
+    where
+        F: FnOnce(T) -> Early<D, U>,
+    {
+        match self {
+            Done(val) => Done(val),
+            Todo(val) => f(val),
+        }
+    }
+}
+
+impl<D, T> Try for Early<D, T> {
+    type Output = T;
+    type Residual = Early<D, Infallible>;
 
     fn from_output(output: Self::Output) -> Self {
         Todo(output)
@@ -26,7 +70,7 @@ impl<T, U> Try for Early<T, U> {
     }
 }
 
-impl<T, U> FromResidual for Early<T, U> {
+impl<D, T> FromResidual for Early<D, T> {
     fn from_residual(residual: <Self as Try>::Residual) -> Self {
         match residual {
             Done(d) => Done(d),
@@ -36,8 +80,8 @@ impl<T, U> FromResidual for Early<T, U> {
 }
 
 #[cfg(feature = "yeet")]
-impl<T, U> FromResidual<Yeet<T>> for Early<T, U> {
-    fn from_residual(residual: Yeet<T>) -> Self {
+impl<D, T> FromResidual<Yeet<D>> for Early<D, T> {
+    fn from_residual(residual: Yeet<D>) -> Self {
         Done(residual.0)
     }
 }
