@@ -16,7 +16,12 @@ impl<T, W> MaybeWarn<T, W> {
     pub fn value_mut(&mut self) -> &mut T {
         let (Ok(val) | Warn(val, _)) = self;
         val
-}
+    }
+
+    pub fn discard_warnings(self) -> T {
+        let (Ok(val) | Warn(val, _)) = self;
+        val
+    }
 
     pub fn as_ref(&self) -> MaybeWarn<&T, &W> {
         match self {

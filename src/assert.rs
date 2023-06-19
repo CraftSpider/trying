@@ -1,3 +1,6 @@
+//! Use `Try`, and a fluent interface, to handle your assertions. For those who don't like macros,
+//! and do like nice assertion messages.
+
 use alloc::borrow::Cow;
 use core::fmt::Debug;
 use core::ops::{ControlFlow, FromResidual, Try};
@@ -7,6 +10,7 @@ use core::fmt::Formatter;
 use std::error::Error;
 use std::process::{ExitCode, Termination};
 
+/// The residual type for a failed assertion
 pub struct AssertResidual(&'static Location<'static>, Cow<'static, str>);
 
 enum AssertInner {
@@ -174,6 +178,10 @@ impl Assert {
     }
 
     /// Convert this assertion to a panic if it failed, or do nothing on a success.
+    ///
+    /// # Panics
+    ///
+    /// If the assertion failed
     pub fn to_panic(self) {
         if let AssertInner::Failure(loc, msg) = self.inner_defuse() {
             panic!("{msg} at {loc}")
@@ -260,7 +268,7 @@ impl FromResidual<Option<Infallible>> for Assert {
     fn from_residual(residual: Option<Infallible>) -> Self {
         match residual {
             Some(val) => match val {},
-            None => Assert::failure(),
+            None => Assert::failure().msg("Expected `Option::Some`, got `Option::None`"),
         }
     }
 }

@@ -1,3 +1,5 @@
+//! A `Result`-like type for cases where you may generate a value and errors combined.
+
 use core::convert::Infallible;
 use core::fmt::Debug;
 use core::ops::{ControlFlow, FromResidual, Try};

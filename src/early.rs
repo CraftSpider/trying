@@ -1,3 +1,6 @@
+//! Type for early-return values - when you want to quickly toss a result up the stack if one is
+//! generated early on.
+
 use core::convert::Infallible;
 #[cfg(feature = "yeet")]
 use core::ops::Yeet;
@@ -5,13 +8,22 @@ use core::ops::{ControlFlow, FromResidual, Try};
 
 use Early::*;
 
+/// An early-return value. A type for when a call may return a final result or want to continue
+/// execution.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Early<D, T> {
+    /// The value to return if computation is done
     Done(D),
+    /// The value to return if control-flow should continue
     Todo(T),
 }
 
 impl<D, T> Early<D, T> {
+    /// Convert this `Early` into its `Done` value
+    ///
+    /// # Panics
+    ///
+    /// If the `Early` is not `Done`
     pub fn unwrap(self) -> D {
         if let Done(val) = self {
             val
@@ -20,6 +32,11 @@ impl<D, T> Early<D, T> {
         }
     }
 
+    /// Convert this `Early` into its `Todo` value
+    ///
+    /// # Panics
+    ///
+    /// If the `Early` is not `Todo`
     pub fn unwrap_todo(self) -> T {
         if let Todo(val) = self {
             val
@@ -28,6 +45,7 @@ impl<D, T> Early<D, T> {
         }
     }
 
+    /// Get a new `Early` that holds references to the values in this `Early`
     pub fn as_ref(&self) -> Early<&D, &T> {
         match self {
             Done(val) => Done(val),
@@ -35,6 +53,7 @@ impl<D, T> Early<D, T> {
         }
     }
 
+    /// Get a new `Early` that holds mutable references to the values in this `Early`
     pub fn as_mut(&mut self) -> Early<&mut D, &mut T> {
         match self {
             Done(val) => Done(val),
